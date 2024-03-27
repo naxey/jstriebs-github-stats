@@ -2,7 +2,7 @@ name: Generate Stats Images
 
 on:
     push:
-        branches: [main]
+        branches: [master]
     schedule:
         - cron: "5 0 * * *"
     workflow_dispatch:
@@ -52,5 +52,5 @@ jobs:
                   git add .
                   # Force the build to succeed, even if no files were changed
                   git commit -m 'Update generated files' || true
-                  git pull --rebase origin beta
+                  git pull --rebase origin master
                   git push
