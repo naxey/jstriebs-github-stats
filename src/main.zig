@@ -275,13 +275,34 @@ pub fn main() !void {
         &.{};
     defer if (args.owned_only) allocator.free(owner_prefix);
     for (stats.repositories) |repository| {
-        if (glob.matchAny(exclude_repos orelse &.{}, repository.name) or
-            (args.exclude_private and repository.private) or
-            (args.exclude_forks and repository.is_fork) or
-            (args.owned_only and !std.mem.startsWith(u8, repository.name, owner_prefix)))
-        {
+        const skip_reason: ?[]const u8 =
+            if (glob.matchAny(exclude_repos orelse &.{}, repository.name))
+                "EXCLUDE_REPOS"
+            else if (args.exclude_private and repository.private)
+                "EXCLUDE_PRIVATE"
+            else if (args.exclude_forks and repository.is_fork)
+                "EXCLUDE_FORKS"
+            else if (args.owned_only and
+                !std.mem.startsWith(u8, repository.name, owner_prefix))
+                "OWNED_ONLY"
+            else
+                null;
+        if (skip_reason) |reason| {
+            std.log.info(
+                "  skip  {s} (stars={d} forks={d}) — {s}",
+                .{ repository.name, repository.stars, repository.forks, reason },
+            );
             continue;
         }
+        std.log.info(
+            "include {s} (stars={d} forks={d} lines_changed={d})",
+            .{
+                repository.name,
+                repository.stars,
+                repository.forks,
+                repository.lines_changed,
+            },
+        );
         aggregate_stats.stars += repository.stars;
         aggregate_stats.forks += repository.forks;
         aggregate_stats.lines_changed += repository.lines_changed;
