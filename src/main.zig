@@ -45,6 +45,7 @@ const Args = struct {
     exclude_repos: ?[]const u8 = null,
     exclude_langs: ?[]const u8 = null,
     exclude_private: bool = false,
+    exclude_forks: bool = false,
     overview_output_file: ?[]const u8 = null,
     languages_output_file: ?[]const u8 = null,
     overview_template: ?[]const u8 = null,
@@ -269,7 +270,8 @@ pub fn main() !void {
     defer aggregate_stats.language_colors.deinit();
     for (stats.repositories) |repository| {
         if (glob.matchAny(exclude_repos orelse &.{}, repository.name) or
-            (args.exclude_private and repository.private))
+            (args.exclude_private and repository.private) or
+            (args.exclude_forks and repository.is_fork))
         {
             continue;
         }
