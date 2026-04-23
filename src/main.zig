@@ -258,11 +258,7 @@ pub fn main() !void {
         views: usize = 0,
         repos: usize = 0,
     } = .{
-        .contributions = stats.repo_contributions +
-            stats.issue_contributions +
-            stats.commit_contributions +
-            stats.pr_contributions +
-            stats.review_contributions,
+        .contributions = stats.total_contributions,
         .languages = .init(allocator),
         .language_colors = .init(allocator),
         .name = stats.name,

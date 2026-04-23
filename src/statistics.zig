@@ -6,11 +6,7 @@ repositories: []Repository,
 user: []const u8,
 name: []const u8,
 emails: [][]const u8,
-repo_contributions: u32 = 0,
-issue_contributions: u32 = 0,
-commit_contributions: u32 = 0,
-pr_contributions: u32 = 0,
-review_contributions: u32 = 0,
+total_contributions: u32 = 0,
 
 const Statistics = @This();
 
@@ -244,11 +240,9 @@ fn getReposByYear(
         \\query ($from: DateTime, $to: DateTime) {
         \\  viewer {
         \\    contributionsCollection(from: $from, to: $to) {
-        \\      totalRepositoryContributions
-        \\      totalIssueContributions
-        \\      totalCommitContributions
-        \\      totalPullRequestContributions
-        \\      totalPullRequestReviewContributions
+        \\      contributionCalendar {
+        \\        totalContributions
+        \\      }
         \\      commitContributionsByRepository(maxRepositories: 100) {
         \\        repository {
         \\          nameWithOwner
@@ -301,11 +295,9 @@ fn getReposByYear(
     const stats = (try std.json.parseFromSliceLeaky(
         struct { data: struct { viewer: struct {
             contributionsCollection: struct {
-                totalRepositoryContributions: u32,
-                totalIssueContributions: u32,
-                totalCommitContributions: u32,
-                totalPullRequestContributions: u32,
-                totalPullRequestReviewContributions: u32,
+                contributionCalendar: struct {
+                    totalContributions: u32,
+                },
                 commitContributionsByRepository: []struct {
                     repository: struct {
                         nameWithOwner: []const u8,
@@ -364,12 +356,8 @@ fn getReposByYear(
         }
     }
 
-    context.result.repo_contributions += stats.totalRepositoryContributions;
-    context.result.issue_contributions += stats.totalIssueContributions;
-    context.result.commit_contributions += stats.totalCommitContributions;
-    context.result.pr_contributions += stats.totalPullRequestContributions;
-    context.result.review_contributions +=
-        stats.totalPullRequestReviewContributions;
+    context.result.total_contributions +=
+        stats.contributionCalendar.totalContributions;
 
     for (stats.commitContributionsByRepository) |x| {
         const raw_repo = x.repository;
