@@ -55,7 +55,9 @@ const Repository = struct {
         if (response.status == .ok) {
             const authors = (try std.json.parseFromSliceLeaky(
                 []struct {
-                    author: struct { login: []const u8 },
+                    // null for commits whose author has no resolvable GitHub
+                    // account (e.g. copilot-swe-agent[bot])
+                    author: ?struct { login: []const u8 },
                     weeks: []struct {
                         a: u32,
                         d: u32,
@@ -67,7 +69,8 @@ const Repository = struct {
             ));
             self.lines_changed = 0;
             for (authors) |o| {
-                if (!std.mem.eql(u8, o.author.login, user)) {
+                const author = o.author orelse continue;
+                if (!std.mem.eql(u8, author.login, user)) {
                     continue;
                 }
                 for (o.weeks) |week| {
