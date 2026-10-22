@@ -47,10 +47,10 @@ pub fn fill(
                 defer i = end + 2;
                 const name = std.mem.trim(u8, template[start + 2 .. end], " ");
                 inline for (
-                    @typeInfo(@TypeOf(o)).@"struct".fields,
-                ) |f| {
-                    if (std.mem.eql(u8, f.name, name)) {
-                        const field = @field(o, f.name);
+                    @typeInfo(@TypeOf(o)).@"struct".field_names,
+                ) |field_name| {
+                    if (std.mem.eql(u8, field_name, name)) {
+                        const field = @field(o, field_name);
                         switch (@typeInfo(@TypeOf(field))) {
                             .int => {
                                 const s = try decimalToString(a, field);

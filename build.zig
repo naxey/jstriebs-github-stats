@@ -7,11 +7,11 @@ pub fn build(b: *std.Build) !void {
         .preferred_optimize_mode = .ReleaseSafe,
     });
     var version: []const u8 = @import("build.zig.zon").version;
-    if (git.isInstalled(b.allocator)) {
+    if (git.isInstalled(b.allocator, b.graph.io)) {
         version = try std.fmt.allocPrint(
             b.allocator,
             "{s} ({s})",
-            .{ version, try git.currentCommit(b.allocator) },
+            .{ version, try git.currentCommit(b.allocator, b.graph.io) },
         );
     }
     const options = b.addOptions();
@@ -32,9 +32,7 @@ pub fn build(b: *std.Build) !void {
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 
     const tests = b.addTest(.{ .root_module = exe.root_module });
     const run_tests = b.addRunArtifact(tests);
