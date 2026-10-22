@@ -34,6 +34,16 @@ pub fn matchAny(patterns: []const []const u8, s: []const u8) bool {
     return false;
 }
 
+/// Comptime string repetition (replaces the `**` operator removed in Zig 0.17)
+inline fn repeat(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    comptime {
+        var result: [s.len * n]u8 = undefined;
+        for (0..n) |i| @memcpy(result[i * s.len ..][0..s.len], s);
+        const final = result;
+        return &final;
+    }
+}
+
 test match {
     const testing = std.testing;
 
@@ -80,19 +90,19 @@ test match {
     try testing.expect(match("som*thing", "somthing"));
 
     try testing.expect(match(
-        "s*a" ++ "*s" ** 8,
-        "s" ** 10 ++ "a" ++ "s" ** 10,
+        "s*a" ++ repeat("*s", 8),
+        repeat("s", 10) ++ "a" ++ repeat("s", 10),
     ));
     try testing.expect(match(
-        "s" ++ "*s" ** 8,
-        "s" ** 10 ++ "a" ++ "s" ** 10,
+        "s" ++ repeat("*s", 8),
+        repeat("s", 10) ++ "a" ++ repeat("s", 10),
     ));
     try testing.expect(match(
-        "s*" ** 8 ++ "a*s",
-        "s" ** 10 ++ "a" ++ "s" ** 10,
+        repeat("s*", 8) ++ "a*s",
+        repeat("s", 10) ++ "a" ++ repeat("s", 10),
     ));
     // Trigger slow (exponential) worst-case
-    try testing.expect(!match("s*" ** 8 ++ "a", "s" ** 30));
+    try testing.expect(!match(repeat("s*", 8) ++ "a", repeat("s", 30)));
 
     // Globbing here doesn't separate on slashes like globbing in the shell
     try testing.expect(match("*", "///"));
