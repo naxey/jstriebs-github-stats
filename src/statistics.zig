@@ -847,9 +847,9 @@ fn deepcopy(a: std.mem.Allocator, o: anytype) !@TypeOf(o) {
         },
         .@"struct" => |s| v: {
             var result = o;
-            inline for (s.fields) |field| {
-                @field(result, field.name) =
-                    try deepcopy(a, @field(o, field.name));
+            inline for (s.field_names) |field_name| {
+                @field(result, field_name) =
+                    try deepcopy(a, @field(o, field_name));
             }
             break :v result;
         },

@@ -27,7 +27,7 @@ fn logFn(
     comptime format: []const u8,
     args: anytype,
 ) void {
-    if (@intFromEnum(message_level) <= @intFromEnum(log_level)) {
+    if (@backingInt(message_level) <= @backingInt(log_level)) {
         std.log.defaultLog(message_level, scope, format, args);
     }
 }
@@ -76,12 +76,13 @@ const Args = struct {
     }
 
     pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
-        inline for (@typeInfo(Self).@"struct".fields) |field| {
-            switch (@typeInfo(field.type)) {
+        const fields = @typeInfo(Self).@"struct";
+        inline for (fields.field_names, fields.field_types) |field_name, field_type| {
+            switch (@typeInfo(field_type)) {
                 .optional => |optional| {
                     switch (@typeInfo(optional.child)) {
                         .pointer => |pointer| switch (pointer.size) {
-                            .slice => if (@field(self, field.name)) |p|
+                            .slice => if (@field(self, field_name)) |p|
                                 allocator.free(p),
                             else => comptime unreachable,
                         },
@@ -90,7 +91,7 @@ const Args = struct {
                     }
                 },
                 .pointer => |p| switch (p.size) {
-                    .slice => allocator.free(@field(self, field.name)),
+                    .slice => allocator.free(@field(self, field_name)),
                     else => comptime unreachable,
                 },
                 .bool, .int => {},
@@ -280,7 +281,7 @@ pub fn main(init: std.process.Init) !void {
             else if (args.exclude_forks and repository.is_fork)
                 "EXCLUDE_FORKS"
             else if (args.owned_only and
-                !std.mem.startsWith(u8, repository.name, owner_prefix))
+            !std.mem.startsWith(u8, repository.name, owner_prefix))
                 "OWNED_ONLY"
             else
                 null;

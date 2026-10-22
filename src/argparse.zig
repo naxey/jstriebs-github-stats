@@ -23,13 +23,13 @@ pub fn parse(
     const a = arena.allocator();
     const args = try init.minimal.args.toSlice(a);
 
-    const fields = @typeInfo(T).@"struct".fields;
-    var seen = [_]bool{false} ** fields.len;
+    const fields = @typeInfo(T).@"struct";
+    var seen: [fields.field_names.len]bool = @splat(false);
     var result: T = undefined;
     errdefer {
-        inline for (fields, seen) |field, seen_field| {
+        inline for (fields.field_names, seen) |field_name, seen_field| {
             if (seen_field) {
-                freeField(allocator, @field(result, field.name));
+                freeField(allocator, @field(result, field_name));
             }
         }
     }
@@ -38,14 +38,14 @@ pub fn parse(
     try setFromEnv(T, allocator, &arena, &seen, &result, init.environ_map);
     try setFromDefaults(T, allocator, &seen, &result);
 
-    inline for (fields, seen) |field, seen_field| {
+    inline for (fields.field_names, fields.field_types, seen) |field_name, field_type, seen_field| {
         if (!seen_field) {
-            if (@typeInfo(stripOptional(field.type)) == .bool) {
-                @field(result, field.name) = false;
+            if (@typeInfo(stripOptional(field_type)) == .bool) {
+                @field(result, field_name) = false;
             } else {
                 try stderr.print(
                     "Missing required argument {s}\n",
-                    .{field.name},
+                    .{field_name},
                 );
                 try printUsage(T, arena.allocator(), args[0]);
                 std.process.exit(1);
@@ -92,31 +92,32 @@ fn setFromCli(
         const arg = try a.dupe(u8, raw_arg[2..]);
         defer a.free(arg);
         std.mem.replaceScalar(u8, arg, '-', '_');
-        inline for (@typeInfo(T).@"struct".fields, seen) |field, *seen_field| {
-            if (!seen_field.* and std.ascii.eqlIgnoreCase(arg, field.name)) {
-                const t = @typeInfo(stripOptional(field.type));
+        const fields = @typeInfo(T).@"struct";
+        inline for (fields.field_names, fields.field_types, seen) |field_name, field_type, *seen_field| {
+            if (!seen_field.* and std.ascii.eqlIgnoreCase(arg, field_name)) {
+                const t = @typeInfo(stripOptional(field_type));
                 if (t == .bool) {
-                    @field(result, field.name) = true;
+                    @field(result, field_name) = true;
                 } else {
                     i += 1;
                     if (i >= args.len) {
                         try stderr.print(
                             "Missing required value for argument {s} {s}\n",
-                            .{ raw_arg, field.name },
+                            .{ raw_arg, field_name },
                         );
                         try printUsage(T, arena.allocator(), args[0]);
                         std.process.exit(1);
                     }
                     switch (t) {
-                        .int => @field(result, field.name) =
+                        .int => @field(result, field_name) =
                             try std.fmt.parseInt(
-                                stripOptional(field.type),
+                                stripOptional(field_type),
                                 args[i],
                                 0,
                             ),
                         .pointer => @field(
                             result,
-                            field.name,
+                            field_name,
                         ) = try allocator.dupe(u8, args[i]),
                         .bool => comptime unreachable,
                         else => @compileError(
@@ -149,23 +150,24 @@ fn setFromEnv(
         const key = try a.dupe(u8, entry.key_ptr.*);
         defer a.free(key);
         std.mem.replaceScalar(u8, key, '-', '_');
-        inline for (@typeInfo(T).@"struct".fields, seen) |field, *seen_field| {
-            if (!seen_field.* and std.ascii.eqlIgnoreCase(key, field.name)) {
-                switch (@typeInfo(stripOptional(field.type))) {
+        const fields = @typeInfo(T).@"struct";
+        inline for (fields.field_names, fields.field_types, seen) |field_name, field_type, *seen_field| {
+            if (!seen_field.* and std.ascii.eqlIgnoreCase(key, field_name)) {
+                switch (@typeInfo(stripOptional(field_type))) {
                     .bool => {
                         const value = try a.dupe(u8, entry.value_ptr.*);
                         defer a.free(value);
-                        @field(result, field.name) = value.len > 0 and
+                        @field(result, field_name) = value.len > 0 and
                             !std.ascii.eqlIgnoreCase(value, "false");
                     },
-                    .int => @field(result, field.name) = try std.fmt.parseInt(
-                        stripOptional(field.type),
+                    .int => @field(result, field_name) = try std.fmt.parseInt(
+                        stripOptional(field_type),
                         entry.value_ptr.*,
                         0,
                     ),
                     .pointer => @field(
                         result,
-                        field.name,
+                        field_name,
                     ) = try allocator.dupe(u8, entry.value_ptr.*),
                     else => @compileError(
                         "Disallowed or unimplemented struct field type.",
@@ -183,16 +185,22 @@ fn setFromDefaults(
     seen: []bool,
     result: *T,
 ) !void {
-    inline for (@typeInfo(T).@"struct".fields, seen) |field, *seen_field| {
+    const fields = @typeInfo(T).@"struct";
+    inline for (
+        fields.field_names,
+        fields.field_types,
+        fields.field_attrs,
+        seen,
+    ) |field_name, field_type, field_attrs, *seen_field| {
         if (!seen_field.*) {
-            if (field.defaultValue()) |default| {
-                switch (@typeInfo(stripOptional(field.type))) {
+            if (field_attrs.defaultValue(field_type)) |default| {
+                switch (@typeInfo(stripOptional(field_type))) {
                     .bool, .int, .float, .@"enum" => {
-                        @field(result, field.name) = default;
+                        @field(result, field_name) = default;
                     },
                     .pointer => @field(
                         result,
-                        field.name,
+                        field_name,
                     ) = if (default) |p| try allocator.dupe(u8, p) else null,
                     else => @compileError("Disallowed struct field type."),
                 }
@@ -205,20 +213,20 @@ fn setFromDefaults(
 fn printUsage(T: type, allocator: std.mem.Allocator, argv0: []const u8) !void {
     try stdout.print("Usage: {s} [options]\n\n", .{argv0});
     try stdout.print("Options:\n", .{});
-    const fields = @typeInfo(T).@"struct".fields;
-    inline for (fields) |field| {
-        switch (@typeInfo(stripOptional(field.type))) {
+    const fields = @typeInfo(T).@"struct";
+    inline for (fields.field_names, fields.field_types) |field_name, field_type| {
+        switch (@typeInfo(stripOptional(field_type))) {
             .bool => {
-                const flag_version = try allocator.dupe(u8, field.name);
+                const flag_version = try allocator.dupe(u8, field_name);
                 defer allocator.free(flag_version);
                 std.mem.replaceScalar(u8, flag_version, '_', '-');
                 try stdout.print("--{s}\n", .{flag_version});
             },
             else => {
-                const flag_version = try allocator.dupe(u8, field.name);
+                const flag_version = try allocator.dupe(u8, field_name);
                 defer allocator.free(flag_version);
                 std.mem.replaceScalar(u8, flag_version, '_', '-');
-                try stdout.print("--{s} {s}\n", .{ flag_version, field.name });
+                try stdout.print("--{s} {s}\n", .{ flag_version, field_name });
             },
         }
     }
